@@ -52,6 +52,8 @@ pub enum Kind {
     Document,
     /// A video.
     Video,
+    /// A YouTube channel or playlist.
+    Channel,
     /// A kind this version of the crate doesn't know yet.
     #[serde(other)]
     Unknown,

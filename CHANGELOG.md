@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-11-14
+
+- `Kind::Channel`: YouTube channels and playlists (previously decoded as `Kind::Unknown`).
+
 ## 0.2.0 — 2026-11-14
 
 - `Client::check_text(text, CheckTextOptions { base, links })` (and on `blocking::Client`) checks
