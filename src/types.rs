@@ -144,14 +144,17 @@ pub struct Segment {
     pub text: String,
 }
 
-/// `GET /api/v0/check`: a published llms.txt checked against the format and its links.
+/// `GET /api/v0/check` or `POST /api/v0/check`: an llms.txt checked against the format and,
+/// when asked, its links.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckResult {
-    /// The site's origin.
-    pub site: String,
-    /// The llms.txt that was checked (or the last place looked when none was found).
-    pub url: String,
+    /// The site's origin; `None` only for [`check_text`](crate::Client::check_text) without a
+    /// `base`.
+    pub site: Option<String>,
+    /// The llms.txt that was checked (or the last place looked when none was found); `None` only
+    /// for [`check_text`](crate::Client::check_text) without a `base`.
+    pub url: Option<String>,
     /// Whether an llms.txt was found.
     pub found: bool,
     /// HTTP status of the llms.txt request.
@@ -164,14 +167,68 @@ pub struct CheckResult {
     pub sections: u64,
     /// The links in the file and which of them are broken.
     pub links: CheckLinks,
-    /// Whether llms-full.txt is published next to it.
-    pub llms_full: bool,
+    /// Whether llms-full.txt is published next to it; `None` when it wasn't checked
+    /// ([`check_text`](crate::Client::check_text) without both `base` and `links`).
+    pub llms_full: Option<bool>,
     /// Errors first, then warnings and notes, in line order.
     pub issues: Vec<CheckIssue>,
     /// Counts of errors and warnings.
     pub summary: CheckSummary,
+    /// The file's structure; `None` when nothing was found.
+    #[serde(default)]
+    pub parsed: Option<Parsed>,
     /// When the check ran (RFC 3339).
     pub checked_at: String,
+}
+
+/// Options for [`Client::check_text`](crate::Client::check_text).
+///
+/// `CheckTextOptions::default()` checks the format only, with relative links left as written.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct CheckTextOptions<'a> {
+    /// A public URL that resolves relative links and is reported as `site`/`url`.
+    pub base: Option<&'a str>,
+    /// Also check up to 25 linked URLs, plus llms-full.txt next to `base` when given.
+    pub links: bool,
+}
+
+/// The parsed structure of an llms.txt file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Parsed {
+    /// The H1 title.
+    pub title: Option<String>,
+    /// The blockquote summary, without `> `.
+    pub summary: Option<String>,
+    /// Markdown between the summary and the first H2, trimmed.
+    pub details: Option<String>,
+    /// The H2 sections, in order.
+    pub sections: Vec<ParsedSection>,
+}
+
+/// An H2 section of a parsed llms.txt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ParsedSection {
+    /// The heading text.
+    pub name: String,
+    /// Whether the section is named "Optional" (case-insensitive).
+    pub optional: bool,
+    /// Non-link content in the section.
+    pub text: Option<String>,
+    /// The section's links, in order.
+    pub links: Vec<ParsedLink>,
+}
+
+/// A link in a parsed llms.txt section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ParsedLink {
+    /// The link text.
+    pub title: String,
+    /// Resolved against the base or fetched URL when possible, else as written.
+    pub url: String,
+    /// Text after `:`, trimmed.
+    pub notes: Option<String>,
+    /// 1-based line in the file.
+    pub line: u64,
 }
 
 /// The links of a checked llms.txt.
@@ -179,7 +236,7 @@ pub struct CheckResult {
 pub struct CheckLinks {
     /// Links in the file.
     pub total: u64,
-    /// Links fetched this run (the first 25).
+    /// Links fetched this run (the first 25); 0 when links weren't checked.
     pub checked: u64,
     /// Links that didn't answer with a success.
     pub broken: Vec<BrokenLink>,

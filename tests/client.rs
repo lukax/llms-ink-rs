@@ -2,8 +2,10 @@ mod common;
 
 use std::time::Duration;
 
-use common::{json, problem, response, serve, CHECK, LLMS};
-use llms_ink::{Client, Error, IssueLevel, Kind, LlmsOptions, Mode, Source};
+use common::{json, problem, response, serve, CHECK, CHECK_TEXT, LLMS};
+use llms_ink::{
+    CheckTextOptions, Client, Error, IssueLevel, Kind, LlmsOptions, Mode, ParsedLink, Source,
+};
 
 fn client(base_url: &str, key: &str) -> Client {
     Client::builder()
@@ -82,12 +84,68 @@ async fn check_decodes_the_report_and_tolerates_unknown_levels() {
     assert!(stub
         .request()
         .starts_with("get /api/v0/check?url=llmstxt.org http/1.1"));
-    assert!(report.found && report.llms_full);
+    assert!(report.found && report.llms_full == Some(true));
+    assert_eq!(report.site.as_deref(), Some("https://llmstxt.org"));
+    assert_eq!(report.parsed, None);
     assert_eq!(report.links.broken[0].status, 404);
     assert_eq!(report.issues[0].level, IssueLevel::Error);
     assert_eq!(report.issues[0].line, Some(12));
     assert_eq!(report.issues[1].level, IssueLevel::Unknown);
     assert_eq!(report.summary.errors, 1);
+}
+
+#[tokio::test]
+async fn check_text_posts_the_text_and_decodes_parsed() {
+    let stub = serve(vec![json(CHECK_TEXT), json(CHECK_TEXT)]);
+    let client = client(&stub.base_url, "");
+    let text = "# Example\n\n> One line.\n";
+    let report = client
+        .check_text(text, CheckTextOptions::default())
+        .await
+        .unwrap();
+    let request = stub.request();
+    assert!(
+        request.starts_with("post /api/v0/check http/1.1"),
+        "{request}"
+    );
+    assert!(
+        request.contains("content-type: text/plain; charset=utf-8\r\n"),
+        "{request}"
+    );
+    assert!(request.ends_with(&format!("\r\n\r\n{text}")), "{request}");
+    assert_eq!(
+        (report.site, report.url, report.llms_full),
+        (None, None, None)
+    );
+    assert_eq!(report.links.checked, 0);
+    let parsed = report.parsed.unwrap();
+    assert_eq!(parsed.title.as_deref(), Some("Example"));
+    assert_eq!(parsed.summary.as_deref(), Some("One line."));
+    assert_eq!(parsed.details, None);
+    let section = &parsed.sections[0];
+    assert!(section.optional && section.text.is_none());
+    assert_eq!(
+        section.links[0],
+        ParsedLink {
+            title: "Guide".into(),
+            url: "/guide.md".into(),
+            notes: Some("start here".into()),
+            line: 7,
+        }
+    );
+
+    let options = CheckTextOptions {
+        base: Some("https://example.com/docs"),
+        links: true,
+    };
+    client.check_text(String::from("x"), options).await.unwrap();
+    let request = stub.request();
+    assert!(
+        request.starts_with(
+            "post /api/v0/check?base=https%3a%2f%2fexample.com%2fdocs&links=1 http/1.1"
+        ),
+        "{request}"
+    );
 }
 
 #[tokio::test]

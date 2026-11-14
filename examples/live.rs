@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let report = client.check(&url).await?;
     println!(
         "check: {} found: {}, {} errors, {} warnings, {} links ({} broken)",
-        report.url,
+        report.url.as_deref().unwrap_or(&url),
         report.found,
         report.summary.errors,
         report.summary.warnings,

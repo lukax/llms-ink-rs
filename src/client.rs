@@ -3,11 +3,11 @@
 use std::fmt;
 use std::time::Duration;
 
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, USER_AGENT};
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
 use serde::de::DeserializeOwned;
 
 use crate::error::{finish, retry_after};
-use crate::{CheckResult, Error, LlmsOptions, LlmsResult};
+use crate::{CheckResult, CheckTextOptions, Error, LlmsOptions, LlmsResult};
 
 /// The API's origin, used unless [`ClientBuilder::base_url`] or `LLMS_INK_API` says otherwise.
 pub const DEFAULT_BASE_URL: &str = "https://llms.ink";
@@ -176,6 +176,21 @@ pub(crate) fn llms_query(url: &str, options: LlmsOptions) -> Vec<(&'static str, 
     query
 }
 
+/// `Content-Type` of the `POST /api/v0/check` body.
+pub(crate) const TEXT_PLAIN: &str = "text/plain; charset=utf-8";
+
+/// Query parameters of `POST /api/v0/check`.
+pub(crate) fn check_text_query<'a>(options: CheckTextOptions<'a>) -> Vec<(&'static str, &'a str)> {
+    let mut query = Vec::with_capacity(2);
+    if let Some(base) = options.base {
+        query.push(("base", base));
+    }
+    if options.links {
+        query.push(("links", "1"));
+    }
+    query
+}
+
 /// An async client for <https://llms.ink>. Needs a Tokio runtime.
 ///
 /// Cloning is cheap and shares the connection pool.
@@ -237,18 +252,37 @@ impl Client {
         self.get("/api/v0/check", &[("url", url)]).await
     }
 
+    /// Checks llms.txt content you have (up to 2,000,000 bytes) without publishing it: the format,
+    /// its parsed structure and, with [`CheckTextOptions::links`], its links.
+    pub async fn check_text(
+        &self,
+        text: impl Into<String>,
+        options: CheckTextOptions<'_>,
+    ) -> Result<CheckResult, Error> {
+        let request = self
+            .http
+            .post(self.config.url("/api/v0/check"))
+            .query(&check_text_query(options))
+            .header(CONTENT_TYPE, TEXT_PLAIN)
+            .body(text.into());
+        self.send(request).await
+    }
+
     async fn get<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, &str)],
     ) -> Result<T, Error> {
+        self.send(self.http.get(self.config.url(path)).query(query))
+            .await
+    }
+
+    async fn send<T: DeserializeOwned>(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<T, Error> {
         self.config.auth.ready()?;
-        let response = self
-            .http
-            .get(self.config.url(path))
-            .query(query)
-            .send()
-            .await?;
+        let response = request.send().await?;
         let status = response.status();
         let wait = retry_after(response.headers());
         let body = response.bytes().await?;

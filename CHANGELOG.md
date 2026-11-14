@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-11-14
+
+- `Client::check_text(text, CheckTextOptions { base, links })` (and on `blocking::Client`) checks
+  llms.txt content through `POST /api/v0/check`.
+- `CheckResult::parsed`: the file's structure as `Parsed`, `ParsedSection` and `ParsedLink`.
+- **Breaking:** `CheckResult::site` and `url` are `Option<String>` (`None` for `check_text`
+  without `base`); `llms_full` is `Option<bool>` (`None` when not checked).
+
 ## 0.1.0 — 2026-11-14
 
 - `Client::llms(url, LlmsOptions { mode, fresh })` and `Client::check(url)` for the llms.ink JSON API,

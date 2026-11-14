@@ -4,9 +4,9 @@ mod common;
 
 use std::time::Duration;
 
-use common::{json, problem, serve, CHECK, LLMS};
+use common::{json, problem, serve, CHECK, CHECK_TEXT, LLMS};
 use llms_ink::blocking::Client;
-use llms_ink::{Error, Kind, LlmsOptions, Mode};
+use llms_ink::{CheckTextOptions, Error, Kind, LlmsOptions, Mode};
 
 fn client(base_url: &str, key: &str) -> Client {
     Client::builder()
@@ -39,6 +39,25 @@ fn llms_and_check() {
         .request()
         .starts_with("get /api/v0/check?url=llmstxt.org "));
     assert_eq!(report.sections, 2);
+}
+
+#[test]
+fn check_text() {
+    let stub = serve(vec![json(CHECK_TEXT)]);
+    let options = CheckTextOptions {
+        base: Some("https://example.com"),
+        links: false,
+    };
+    let report = client(&stub.base_url, "")
+        .check_text("# Example\n", options)
+        .unwrap();
+    let request = stub.request();
+    assert!(
+        request.starts_with("post /api/v0/check?base=https%3a%2f%2fexample.com http/1.1"),
+        "{request}"
+    );
+    assert!(request.ends_with("\r\n\r\n# Example\n"), "{request}");
+    assert_eq!(report.parsed.unwrap().sections[0].links[0].line, 7);
 }
 
 #[test]

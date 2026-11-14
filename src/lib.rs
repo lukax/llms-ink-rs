@@ -2,7 +2,7 @@
 //! GitHub repo, PDF or video — into [llms.txt](https://llmstxt.org) or llms-full.txt.
 //!
 //! ```no_run
-//! use llms_ink::{Client, LlmsOptions, Mode};
+//! use llms_ink::{CheckTextOptions, Client, LlmsOptions, Mode};
 //!
 //! # async fn run() -> Result<(), llms_ink::Error> {
 //! let client = Client::new(); // key from LLMS_INK_KEY, anonymous when unset
@@ -15,6 +15,14 @@
 //!
 //! let report = client.check("llmstxt.org").await?;
 //! println!("found: {}, errors: {}", report.found, report.summary.errors);
+//!
+//! // llms.txt you haven't published yet
+//! let draft = "# Example\n\n> One line.\n\n## Docs\n\n- [Guide](/guide.md): start here\n";
+//! let options = CheckTextOptions { base: Some("https://example.com"), links: false };
+//! let report = client.check_text(draft, options).await?;
+//! for section in report.parsed.iter().flat_map(|p| &p.sections) {
+//!     println!("{}: {} links", section.name, section.links.len());
+//! }
 //! # Ok(()) }
 //! ```
 //!
@@ -52,8 +60,9 @@ mod types;
 pub use client::{Client, ClientBuilder, DEFAULT_BASE_URL, DEFAULT_TIMEOUT};
 pub use error::Error;
 pub use types::{
-    BrokenLink, CheckIssue, CheckLinks, CheckResult, CheckSummary, Issue, IssueLevel, Kind,
-    LlmsOptions, LlmsResult, Media, Mode, Segment, Source, Transcript,
+    BrokenLink, CheckIssue, CheckLinks, CheckResult, CheckSummary, CheckTextOptions, Issue,
+    IssueLevel, Kind, LlmsOptions, LlmsResult, Media, Mode, Parsed, ParsedLink, ParsedSection,
+    Segment, Source, Transcript,
 };
 
 /// The `User-Agent` every request sends: `llms-ink-rust/<version>`.

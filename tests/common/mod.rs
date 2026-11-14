@@ -1,9 +1,9 @@
 //! A one-shot HTTP stub on a std `TcpListener`: serves canned responses in order and hands back the
-//! request heads it saw (lowercased).
+//! requests it saw (head lowercased, then a blank line and the body).
 
 #![allow(dead_code)]
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
@@ -15,7 +15,7 @@ pub struct Stub {
 }
 
 impl Stub {
-    /// The next request head (request line and headers), lowercased.
+    /// The next request: its head (request line and headers) lowercased, `\r\n`, then the body.
     pub fn request(&self) -> String {
         self.requests
             .recv_timeout(Duration::from_secs(5))
@@ -39,8 +39,17 @@ pub fn serve(responses: Vec<String>) -> Stub {
                 }
                 head.push_str(&line);
             }
+            let mut head = head.to_lowercase();
+            let length = head
+                .lines()
+                .find_map(|l| l.strip_prefix("content-length: "))
+                .map_or(0, |n| n.trim().parse().unwrap());
+            let mut body = vec![0; length];
+            reader.read_exact(&mut body).unwrap();
+            head.push_str("\r\n");
+            head.push_str(&String::from_utf8(body).unwrap());
             stream.write_all(response.as_bytes()).unwrap();
-            let _ = tx.send(head.to_lowercase());
+            let _ = tx.send(head);
         }
     });
     Stub { base_url, requests }
@@ -98,5 +107,29 @@ pub const CHECK: &str = r#"{
     {"level": "hint", "code": "future_check", "line": null, "message": "A level this crate doesn't know."}
   ],
   "summary": {"errors": 1, "warnings": 0},
+  "checkedAt": "2026-11-14T00:00:00.000Z"
+}"#;
+
+pub const CHECK_TEXT: &str = r#"{
+  "site": null,
+  "url": null,
+  "found": true,
+  "status": 200,
+  "title": "Example",
+  "tokens": 20,
+  "sections": 1,
+  "links": {"total": 1, "checked": 0, "broken": []},
+  "llmsFull": null,
+  "issues": [],
+  "summary": {"errors": 0, "warnings": 0},
+  "parsed": {
+    "title": "Example",
+    "summary": "One line.",
+    "details": null,
+    "sections": [
+      {"name": "Optional", "optional": true, "text": null,
+       "links": [{"title": "Guide", "url": "/guide.md", "notes": "start here", "line": 7}]}
+    ]
+  },
   "checkedAt": "2026-11-14T00:00:00.000Z"
 }"#;

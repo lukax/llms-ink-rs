@@ -48,10 +48,35 @@ for issue in &report.issues {
 }
 ```
 
+Check llms.txt you haven't published (`POST /api/v0/check`, up to 2 MB):
+
+```rust
+use llms_ink::CheckTextOptions;
+
+let text = std::fs::read_to_string("llms.txt")?;
+let options = CheckTextOptions { base: Some("https://example.com"), links: true };
+let report = client.check_text(text, options).await?;
+if let Some(parsed) = &report.parsed {
+    for section in &parsed.sections {
+        for link in &section.links {
+            println!("{} line {}: {} {}", section.name, link.line, link.title, link.url);
+        }
+    }
+}
+```
+
+`base` resolves relative links and is reported as `site`/`url` (both `None` without it); `links`
+also checks up to 25 linked URLs and, with `base`, llms-full.txt (`llms_full` is `None` when not
+checked). Both `check` and `check_text` return `parsed`: `title`, `summary`, `details` and
+`sections` with their `links` (`title`, `url`, `notes`, `line`), or `None` when nothing was found.
+
+0.2.0 is a breaking release: `CheckResult::site`/`url` are `Option<String>` and `llms_full` is
+`Option<bool>`. See [CHANGELOG.md](CHANGELOG.md).
+
 ### Blocking
 
 ```toml
-llms-ink = { version = "0.1", features = ["blocking"] }
+llms-ink = { version = "0.2", features = ["blocking"] }
 ```
 
 ```rust

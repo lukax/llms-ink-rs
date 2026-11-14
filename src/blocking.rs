@@ -17,9 +17,11 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 
-use crate::client::{llms_query, Auth, Config};
+use reqwest::header::CONTENT_TYPE;
+
+use crate::client::{check_text_query, llms_query, Auth, Config, TEXT_PLAIN};
 use crate::error::{finish, retry_after};
-use crate::{CheckResult, Error, LlmsOptions, LlmsResult};
+use crate::{CheckResult, CheckTextOptions, Error, LlmsOptions, LlmsResult};
 
 /// Builds a blocking [`Client`]; the same settings as [`crate::ClientBuilder`].
 #[derive(Debug, Clone, Default)]
@@ -104,9 +106,32 @@ impl Client {
         self.get("/api/v0/check", &[("url", url)])
     }
 
+    /// Checks llms.txt content you have (up to 2,000,000 bytes) without publishing it: the format,
+    /// its parsed structure and, with [`CheckTextOptions::links`], its links.
+    pub fn check_text(
+        &self,
+        text: impl Into<String>,
+        options: CheckTextOptions<'_>,
+    ) -> Result<CheckResult, Error> {
+        let request = self
+            .http
+            .post(self.config.url("/api/v0/check"))
+            .query(&check_text_query(options))
+            .header(CONTENT_TYPE, TEXT_PLAIN)
+            .body(text.into());
+        self.send(request)
+    }
+
     fn get<T: DeserializeOwned>(&self, path: &str, query: &[(&str, &str)]) -> Result<T, Error> {
+        self.send(self.http.get(self.config.url(path)).query(query))
+    }
+
+    fn send<T: DeserializeOwned>(
+        &self,
+        request: reqwest::blocking::RequestBuilder,
+    ) -> Result<T, Error> {
         self.config.auth.ready()?;
-        let response = self.http.get(self.config.url(path)).query(query).send()?;
+        let response = request.send()?;
         let status = response.status();
         let wait = retry_after(response.headers());
         let body = response.bytes()?;
