@@ -1,0 +1,43 @@
+[package]
+name = "llms-ink"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Client for llms.ink: turn any public link (site, docs, GitHub repo, PDF, video) into llms.txt or llms-full.txt."
+license = "MIT"
+authors = ["Lucas Espindola"]
+repository = "https://github.com/lukax/llms-ink-rs"
+homepage = "https://llms.ink"
+documentation = "https://docs.rs/llms-ink"
+readme = "README.md"
+keywords = ["llms-txt", "llm", "markdown", "rag", "ai"]
+categories = ["api-bindings", "web-programming::http-client"]
+include = ["/src", "/examples", "/tests", "/README.md", "/CHANGELOG.md", "/LICENSE"]
+
+[lib]
+name = "llms_ink"
+
+[features]
+default = ["rustls"]
+## TLS with rustls and the platform's certificate store (reqwest's default backend).
+rustls = ["reqwest/rustls"]
+## TLS with the system library (OpenSSL, Secure Transport, SChannel) instead of rustls.
+native-tls = ["reqwest/native-tls"]
+## `llms_ink::blocking::Client`, a synchronous client.
+blocking = ["reqwest/blocking"]
+
+[dependencies]
+httpdate = "1"
+reqwest = { version = "0.13", default-features = false, features = ["query"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[[example]]
+name = "blocking"
+required-features = ["blocking"]
+
+[package.metadata.docs.rs]
+all-features = true
